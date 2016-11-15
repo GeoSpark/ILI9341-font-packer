@@ -8,10 +8,30 @@ can display (almost) any font on an
 [ILI9341](https://github.com/PaulStoffregen/ILI9341_t3) and [SerialFlash](https://github.com/PaulStoffregen/SerialFlash)
 libraries for the Teensy.
 
-Tested with Python 3.5. 2.x will possibly baulk at all the byte and string twiddling, but that shouldn't be hard to fix 
-for those with the inclination.
+Tested with Python 3.5 on Linux Mint 18. Python 2.x will possibly baulk at all the byte and string twiddling, but that shouldn't be hard to fix 
+for those with the inclination and a foot in the distant past. Other platforms should work out of the box, but pull
+requests are welcome for any necessary fixes for Windows or OS X.
 
-Don't forget to check the license of any font you use. Use of this software grants you no rights in that regard.
+*Don't forget to check the license of any font you use. Use of this software grants you no rights in that regard.*
+
+## Requirements
+
+The requirements are modest:
+
+    freetype-py >= 1.0.2
+    bitstring >= 3.1.5
+    docopt >= 0.6.2
+    pyserial >= 3.2.1
+
+FreeType is the obvious one, it is available for all major platforms, and the Python wrapper works well.
+
+Because the font format is very tightly packed (and, I must say, very clever), `bitstring` is used to smush everything
+together.
+ 
+ `docopt` because it is one of the most Pythonic and beautiful packages out there, and by far the best for command line
+ argument parsing.
+ 
+ If you want to upload directly to your Teensy, you'll need `pyserial` to run `rawfile-uploader.py`.
 
 ## What's inside?
 The main application is `font_packer.py`:
