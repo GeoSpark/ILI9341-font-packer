@@ -1,0 +1,4 @@
+freetype-py>=1.0.2
+bitstring>=3.1.5
+docopt>=0.6.2
+pyserial>=3.2.1
