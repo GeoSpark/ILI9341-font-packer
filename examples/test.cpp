@@ -30,7 +30,7 @@ void setup() {
     tft.fillScreen(ILI9341_YELLOW);
     tft.setTextColor(ILI9341_BLACK);
 
-    SerialFlashFile ff = SerialFlash.open("numbers.bin");
+    SerialFlashFile ff = SerialFlash.open("TakaoPG.bin");
 
     if (ff != 0) {
       // Allocate enough space for the font.
@@ -41,14 +41,16 @@ void setup() {
 
       // Fix up the pointers.
       myfont->index = static_cast<byte*>(font_data) + sizeof(ILI9341_t3_font_t);
-      int index_size_bits = ((myfont->index1_last - myfont->index1_first) + 1) * myfont->bits_index;
-      int index_size = ((index_size_bits + 7) / 8);
-      myfont->data = myfont->index + index_size;
+      int num_table_entries = (myfont->index1_first << 8) | (myfont->index1_last);
+      int index_size = ((num_table_entries * myfont->bits_index) + 7) / 8;
+      int table_size = ((num_table_entries * 21) + 7) / 8;
+      myfont->unicode = myfont->index + index_size;
+      myfont->data = myfont->unicode + table_size;
 
       // Don't forget to dereference your pointer here.
       tft.setFont(*myfont);
-      tft.setCursor(0, 0);
-      tft.println("+-0.123456789a/,23 4546326.0");
+      tft.setCursor(0, 100);
+      tft.print("こんにちは");
 
       // Use one of the fonts that comes with the library.
       tft.setFont(Arial_13);

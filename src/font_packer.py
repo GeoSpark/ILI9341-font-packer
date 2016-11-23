@@ -3,13 +3,12 @@
 # Released under the MIT License (MIT)
 # See the LICENSE file, or visit http://opensource.org/licenses/MIT
 
-"""ILI9341 Font Packer
+"""ILI9341 Font Packer v1.1
 
 Converts TrueType fonts to a compact binary bitmap format for use with Paul Stoffregen's ILI9341 library for the Teensy.
 
 Usage:
-    font_packer.py --height=<pixels> [--range=<range-string>] [--placeholder=<ascii-code>] [--packed|--code|--smoke]
-                   <font-file> [<output>]
+    font_packer.py --height=<pixels> [--range=<range-string>] [--packed|--code|--smoke] <font-file> [<output>]
     font_packer.py -h | --help
     font_packer.py --version
 
@@ -17,8 +16,7 @@ Options:
     -h --help                   Show this screen.
     --version                   Show version.
     --height=<pixels>           The maximum height of the glyphs.
-    --range=<range-string>      A range of ASCII codes to generate glyphs for [default: 32-126].
-    --placeholder=<ascii-code>  A placeholder character to use for ones not in the set. Defaults to the first one.
+    --range=<range-string>      A range of Unicode codepoints to generate glyphs for [default: 32-126].
     --packed                    Sends the packed binary bitmap font to output or stdout.
     --code                      Generates C structs to output or stdout.
     --smoke                     Smoke proof. Displays to output or stdout the bitmaps of each character as asterisks.
@@ -40,21 +38,14 @@ from font import Font
 from range_parser import parse_disjoint_range
 
 
-def generate(height, ascii_range, font_file_path, output_file_name, placeholder, packed, code, smoke):
-    glyphs = [chr(x) for x in ascii_range]
-
+def generate(height, codepoints, font_file_path, output_file_name, packed, code, smoke):
     font = Font(font_file_path, height)
 
     if smoke:
+        glyphs = [chr(x) for x in codepoints]
         f = sys.stdout.buffer
         if output_file_name is not None:
             f = open(output_file_name, 'wt')
-
-        if placeholder is not None:
-            ch = font.render_character(chr(placeholder))
-            f.write(chr(placeholder) + '\n')
-            f.write(repr(ch))
-            f.write('\n\n')
 
         for cur_glyph in glyphs:
             ch = font.render_character(cur_glyph)
@@ -71,8 +62,8 @@ def generate(height, ascii_range, font_file_path, output_file_name, placeholder,
     ili9341_t3_font['data'] = 0
     ili9341_t3_font['version'] = 1
     ili9341_t3_font['reserved'] = 0
-    ili9341_t3_font['index1_first'] = ascii_range[0]
-    ili9341_t3_font['index1_last'] = ascii_range[-1]
+    ili9341_t3_font['index1_first'] = (len(codepoints) & 0xff00) >> 8
+    ili9341_t3_font['index1_last'] = len(codepoints) & 0xff
     ili9341_t3_font['index2_first'] = 0
     ili9341_t3_font['index2_last'] = 0
     ili9341_t3_font['bits_index'] = 0
@@ -93,15 +84,8 @@ def generate(height, ascii_range, font_file_path, output_file_name, placeholder,
 
     glyph_data = dict()
 
-    if placeholder is not None:
-        glyph_header = build_glyph(chr(placeholder), font, glyph_data, True)
-        max_width = max(max_width, glyph_header['width'])
-        max_height = max(max_height, glyph_header['height'])
-        max_xoffset = max(abs(max_xoffset), abs(glyph_header['xoffset']))
-        max_yoffset = max(abs(max_yoffset), abs(glyph_header['yoffset']))
-        max_delta = max(max_delta, glyph_header['delta'])
-
-    for cur_glyph in glyphs:
+    for codepoint in codepoints:
+        cur_glyph = chr(codepoint)
         glyph_header = build_glyph(cur_glyph, font, glyph_data)
         max_width = max(max_width, glyph_header['width'])
         max_height = max(max_height, glyph_header['height'])
@@ -119,18 +103,8 @@ def generate(height, ascii_range, font_file_path, output_file_name, placeholder,
     index = list()
     total_size = 0
 
-    if placeholder is not None:
-        glyph = glyph_data['placeholder']
-        glyph_bytes = pack_glyph(glyph, ili9341_t3_font)
-        output_data.extend(glyph_bytes)
-        total_size += len(glyph_bytes)
-
-    for ascii_code in range(ili9341_t3_font['index1_first'], ili9341_t3_font['index1_last'] + 1):
-        ch = chr(ascii_code)
-
-        if ch not in glyph_data:
-            index.append(0)
-            continue
+    for codepoint in codepoints:
+        ch = chr(codepoint)
 
         index.append(total_size)
         glyph = glyph_data[ch]
@@ -145,6 +119,10 @@ def generate(height, ascii_range, font_file_path, output_file_name, placeholder,
     for idx in index:
         index_bits.append(Bits(uint=idx, length=ili9341_t3_font['bits_index']))
 
+    codepoint_table = BitString()
+    for codepoint in codepoints:
+        codepoint_table.append(Bits(uint=codepoint, length=21))
+
     if packed:
         f = sys.stdout.buffer
 
@@ -153,6 +131,7 @@ def generate(height, ascii_range, font_file_path, output_file_name, placeholder,
 
         f.write(struct.pack('<3I14Bxx', *tuple(ili9341_t3_font.values())))
         index_bits.tofile(f)
+        codepoint_table.tofile(f)
         f.write(output_data)
         f.close()
 
@@ -181,9 +160,16 @@ def generate(height, ascii_range, font_file_path, output_file_name, placeholder,
         c.write('};\n')
         c.write('/* font index size: {} bytes */\n\n'.format(len(index_byte_array)))
 
+        c.write('static const unsigned char {}_codepoints[] = {{\n'.format(variable_name))
+        codepoint_byte_array = ['0x' + binascii.hexlify(bytes([x])).decode() for x in codepoint_table.tobytes()]
+        for i in range(0, len(codepoint_byte_array), 10):
+            c.write(','.join(codepoint_byte_array[i:i + 10]) + ',\n')
+        c.write('};\n')
+        c.write('/* Unicode codepoint table size: {} bytes */\n\n'.format(len(codepoint_byte_array)))
+
         c.write('const ILI9341_t3_font_t {} = {{\n'.format(variable_name))
         c.write('    {}_index,\n'.format(variable_name))
-        c.write('    {},\n'.format(ili9341_t3_font['unicode']))
+        c.write('    {}_codepoints,\n'.format(variable_name))
         c.write('    {}_data,\n'.format(variable_name))
         c.write('    {},\n'.format(ili9341_t3_font['version']))
         c.write('    {},\n'.format(ili9341_t3_font['reserved']))
@@ -258,7 +244,7 @@ def build_glyph(cur_glyph, font, glyph_data, isplaceholder=False):
 
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='ILI9341 Font Packer v1.0')
+    args = docopt(__doc__, version='ILI9341 Font Packer v1.1')
 
     if not (args['--packed'] or args['--code'] or args['--smoke']):
         args['--packed'] = True
@@ -268,5 +254,5 @@ if __name__ == '__main__':
     if len(invalid) > 0:
         sys.stderr.write('Warning, invalid values in range: {}'.format(invalid))
 
-    generate(int(args['--height']), r, args['<font-file>'], args['<output>'], int(args['--placeholder']),
-             args['--packed'], args['--code'], args['--smoke'])
+    generate(int(args['--height']), r, args['<font-file>'], args['<output>'], args['--packed'], args['--code'],
+             args['--smoke'])

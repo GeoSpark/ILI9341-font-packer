@@ -35,9 +35,9 @@ if len(sys.argv) <= 2:
 FLASH_SIZE = 16
 
 totalFileSize = 0
-for i, filename in enumerate(sys.argv):
+for i, file_path in enumerate(sys.argv):
     if i >= 2:
-        totalFileSize = totalFileSize + os.path.getsize(filename)
+        totalFileSize = totalFileSize + os.path.getsize(file_path)
 
 flashSizeBytes = FLASH_SIZE * 1024 * 1024
 if totalFileSize > flashSizeBytes:
@@ -47,19 +47,20 @@ if totalFileSize > flashSizeBytes:
 
 ser = serial.Serial(sys.argv[1])
 print("Uploading " + str(len(sys.argv) - 2) + " files...")
-for i, filename in enumerate(sys.argv):
+for i, file_path in enumerate(sys.argv):
     if i >= 2:
         startTime = time.time()
         sys.stdout.write(str(i - 1) + ": ")
-        sys.stdout.write(filename)
+        sys.stdout.write(file_path)
         sys.stdout.flush()
 
-        f = open(filename, "rb")
-        fileLength = os.path.getsize(filename)
+        f = open(file_path, "rb")
+        fileLength = os.path.getsize(file_path)
         try:
+            file_name, _ = os.path.split(file_path)
             encoded = BytesIO()
-            encoded.write(filename.encode())
-            encoded.write(b'\x00' * (12 - len(filename)))
+            encoded.write(file_name.encode())
+            encoded.write(b'\x00' * (12 - len(file_name)))
             encoded.write(struct.pack('<I', fileLength))
             encoded.write(f.read())
             s = encoded.getvalue()
