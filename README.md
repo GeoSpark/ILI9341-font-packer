@@ -1,4 +1,4 @@
-# ILI9341 Font Packer v1.0
+# ILI9341 Font Packer v1.1
 
 ## What does it do?
 Using a combination of a [Teensy](https://www.pjrc.com/teensy/) microcontroller, and an
